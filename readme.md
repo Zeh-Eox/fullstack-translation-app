@@ -30,8 +30,8 @@ Cette application facilite la création de correspondances linguistiques (ex : f
 ### Étape 1: Cloner le projet
 
 ```bash
-git clone https://github.com/ton-compte/ton-projet.git
-cd ton-projet
+git clone https://github.com/Zeh-Eox/fullstack-translation-app.git
+cd fullstack-translation-app
 ```
 
 ### Étape 2: Configurer et lancer le backend
