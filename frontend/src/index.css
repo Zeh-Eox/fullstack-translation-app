@@ -1,0 +1,8 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Styles personnalisés */
+body {
+  @apply bg-gray-50;
+}

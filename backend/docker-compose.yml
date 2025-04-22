@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    container_name: TranslationApi
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Laravel
+      - APP_ENV=local
+      - APP_KEY=base64:QDcKnjkaTQYcNqBtdcI/zP5VJlQZwMQHHONqGYNWFnU=
+      - DB_CONNECTION=sqlite
+    command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
