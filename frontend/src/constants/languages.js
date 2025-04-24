@@ -1,0 +1,1 @@
+import { getLanguages } from "../api/requests/languagesRequest";

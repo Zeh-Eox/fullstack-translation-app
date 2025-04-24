@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import DataTable from 'react-data-table-component';
 import {
   getAllTranslations,
@@ -6,48 +6,65 @@ import {
   updateTranslation,
   deleteTranslation,
 } from '../../api/requests/translationsRequest';
+import { getLanguages, createLanguage } from '../../api/requests/languagesRequest';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Configuration des langues disponibles
-const LANGUAGE_OPTIONS = {
-  fr: 'Français',
-  en: 'Anglais',
-  es: 'Espagnol',
-  Mo: 'Moore',
-  Di: 'Dioula',
-  Go: 'Gourma'
-};
-
 const Translations = () => {
   const [translations, setTranslations] = useState([]);
+  const [languages, setLanguages] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filterLang, setFilterLang] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddLanguageModal, setShowAddLanguageModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [translationToDelete, setTranslationToDelete] = useState(null);
   const [newTranslation, setNewTranslation] = useState({
     source_text: '',
     target_text: '',
     source_language: 'fr',
-    target_language: 'en'
+    target_language: 'en',
+  });
+  const [newLanguage, setNewLanguage] = useState({
+    language: '',
+    language_code: '',
   });
   const [editingTranslation, setEditingTranslation] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [filterLang, setFilterLang] = useState('all');
-  const [confirmDeleteModal, setConfirmDeleteModal] = useState(false);
-  const [translationToDelete, setTranslationToDelete] = useState(null);
 
-  // Récupérer les traductions
+  const fetchLanguages = async () => {
+    setLoading(true);
+    try {
+      const response = await getLanguages();
+      if (response?.data?.success && Array.isArray(response.data.data)) {
+        const languagesMap = response.data.data.reduce((acc, lang) => {
+          acc[lang.language_code] = lang.language;
+          return acc;
+        }, {});
+        setLanguages(languagesMap);
+      } else {
+        throw new Error('Format de données incorrect');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error(error.message || 'Erreur de chargement des langues');
+      setLanguages({});
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchTranslations = async () => {
     setLoading(true);
     try {
       const response = await getAllTranslations();
-
       if (response?.success && Array.isArray(response?.data)) {
         setTranslations(response.data);
       } else {
         throw new Error(response?.error?.message || 'Format de données incorrect');
       }
     } catch (err) {
-      console.error("Erreur:", err);
+      console.error('Erreur:', err);
       toast.error(err.message || 'Erreur de chargement des traductions');
       setTranslations([]);
     } finally {
@@ -55,42 +72,69 @@ const Translations = () => {
     }
   };
 
-  useEffect(() => {
-    fetchTranslations();
+  const resetTranslationForm = useCallback(() => {
+    setNewTranslation({
+      source_text: '',
+      target_text: '',
+      source_language: 'fr',
+      target_language: 'en',
+    });
+    setEditingTranslation(null);
   }, []);
 
-  // Créer une nouvelle traduction
-  const handleCreateTranslation = async (e) => {
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setNewTranslation(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  }, []);
+
+  const handleLanguageInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setNewLanguage(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  }, []);
+
+  const handleEditTranslation = useCallback((translation) => {
+    setEditingTranslation(translation);
+    setNewTranslation({
+      source_text: translation.source_text,
+      target_text: translation.target_text,
+      source_language: translation.source_language,
+      target_language: translation.target_language,
+    });
+    setShowAddModal(true);
+  }, []);
+
+  const handleCreateTranslation = useCallback(async (e) => {
     e.preventDefault();
-
-    // Validations
-    if (!newTranslation.source_text.trim() || !newTranslation.target_text.trim()) {
-      toast.error('Les champs de texte ne peuvent pas être vides');
-      return;
-    }
-
-    if (newTranslation.source_language === newTranslation.target_language) {
-      toast.error('Les langues source et cible doivent être différentes');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      const response = await createTranslation(newTranslation);
+      if (!newTranslation.source_text.trim() || !newTranslation.target_text.trim()) {
+        toast.error('Les champs de texte ne peuvent pas être vides');
+        return;
+      }
+
+      if (newTranslation.source_language === newTranslation.target_language) {
+        toast.error('Les langues source et cible doivent être différentes');
+        return;
+      }
+
+      let response;
+      if (editingTranslation) {
+        response = await updateTranslation(editingTranslation.id, newTranslation);
+      } else {
+        response = await createTranslation(newTranslation);
+      }
 
       if (response.status_code === 200 || response.success) {
-        toast.success(response.status_message || 'Traduction créée avec succès!');
-
-        // Rafraîchir la liste complète
+        toast.success(response.status_message || (editingTranslation ? 'Traduction mise à jour avec succès!' : 'Traduction créée avec succès!'));
         await fetchTranslations();
-
-        setNewTranslation({
-          source_text: '',
-          target_text: '',
-          source_language: 'fr',
-          target_language: 'en'
-        });
+        resetTranslationForm();
         setShowAddModal(false);
       } else {
         toast.error(response.status_message || response.message || 'Erreur lors de la création');
@@ -101,405 +145,561 @@ const Translations = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [newTranslation, editingTranslation, resetTranslationForm]);
 
-  // Supprimer une traduction
-  const handleDelete = (translationId) => {
-    setTranslationToDelete(translationId);
-    setConfirmDeleteModal(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!translationToDelete) return;
-
-    setLoading(true);
-    try {
-      const response = await deleteTranslation(translationToDelete);
-
-      if (response.success) {
-        await fetchTranslations();
-        toast.success(response.message || 'Traduction supprimée avec succès!');
-      } else {
-        toast.error(response.error?.message || 'Erreur lors de la suppression');
-      }
-    } catch (err) {
-      console.error("Erreur:", err);
-      toast.error('Une erreur est survenue lors de la suppression');
-    } finally {
-      setLoading(false);
-      setConfirmDeleteModal(false);
-      setTranslationToDelete(null);
-    }
-  };
-
-  // Modifier une traduction
-  const handleEdit = (translation) => {
-    setEditingTranslation({ ...translation });
-  };
-
-  const handleUpdate = async () => {
-    if (!editingTranslation) return;
-
-    if (!editingTranslation.source_text.trim() || !editingTranslation.target_text.trim()) {
-      toast.error('Les champs de texte ne peuvent pas être vides');
-      return;
-    }
-
+  const handleAddLanguage = useCallback(async (e) => {
+    e.preventDefault();
     setIsSubmitting(true);
-    try {
-      const response = await updateTranslation(editingTranslation.id, editingTranslation);
 
-      if (response.success) {
-        await fetchTranslations();
-        setEditingTranslation(null);
-        toast.success('Traduction mise à jour avec succès!');
-      } else {
-        toast.error(response.error?.message || 'Erreur lors de la modification');
+    try {
+      if (!newLanguage.language.trim() || !newLanguage.language_code.trim()) {
+        toast.error('Veuillez remplir tous les champs');
+        return;
       }
-    } catch (err) {
-      toast.error('Une erreur est survenue lors de la modification.');
+
+      const response = await createLanguage(newLanguage);
+      
+      if (response?.data?.success) {
+        toast.success('Langue ajoutée avec succès');
+        setShowAddLanguageModal(false);
+        setNewLanguage({ language: '', language_code: '' });
+        await fetchLanguages();
+      } else {
+        throw new Error(response?.data?.status_message || 'Erreur lors de l\'ajout de la langue');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error(error.message || 'Erreur lors de l\'ajout de la langue');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [newLanguage]);
+
+  const handleDeleteTranslation = async (id) => {
+    try {
+      setIsSubmitting(true);
+      const response = await deleteTranslation(id);
+      if (response?.success) {
+        toast.success('Traduction supprimée avec succès');
+        await fetchTranslations();
+        setShowDeleteModal(false);
+        setTranslationToDelete(null);
+      } else {
+        throw new Error(response?.error?.message || 'Erreur lors de la suppression');
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      toast.error(error.message || 'Erreur lors de la suppression de la traduction');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Filtrer les traductions
-  const filteredTranslations = translations.filter(translation => {
-    if (filterLang === 'all') return true;
-    return translation.source_language === filterLang ||
-           translation.target_language === filterLang;
-  });
+  const confirmDeleteTranslation = useCallback((translation) => {
+    setTranslationToDelete(translation);
+    setShowDeleteModal(true);
+  }, []);
 
-  // Configuration des colonnes
+  useEffect(() => {
+    fetchLanguages();
+    fetchTranslations();
+  }, []);
+
   const columns = [
     {
       name: 'Langues',
-      selector: row => `${LANGUAGE_OPTIONS[row.source_language]} → ${LANGUAGE_OPTIONS[row.target_language]}`,
+      selector: (row) => `${languages[row.source_language]} → ${languages[row.target_language]}`,
       sortable: true,
-      cell: row => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          {LANGUAGE_OPTIONS[row.source_language]} → {LANGUAGE_OPTIONS[row.target_language]}
+      cell: (row) => (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
+          {languages[row.source_language]} → {languages[row.target_language]}
         </span>
       ),
       width: '180px',
     },
     {
       name: 'Texte source',
-      selector: row => row.source_text,
+      selector: (row) => row.source_text,
       sortable: true,
-      cell: row => (
+      cell: (row) => (
         <div className="p-2 max-w-md">
-          <p className="text-gray-700 line-clamp-2">{row.source_text}</p>
+          <p className="text-gray-800 line-clamp-2">{row.source_text}</p>
         </div>
       ),
       grow: 2,
     },
     {
       name: 'Texte traduit',
-      selector: row => row.target_text,
+      selector: (row) => row.target_text,
       sortable: true,
-      cell: row => (
+      cell: (row) => (
         <div className="p-2 max-w-md">
-          <p className="text-gray-700 line-clamp-2">{row.target_text}</p>
+          <p className="text-gray-800 line-clamp-2">{row.target_text}</p>
         </div>
       ),
       grow: 2,
     },
     {
       name: 'Ajouté par',
-      selector: row => row.user?.name || 'Utilisateur',
+      selector: (row) => row.user?.name || 'Anonyme',
       sortable: true,
-      width: '150px',
-    },
-    {
-      name: 'Date',
-      selector: row => new Date(row.created_at).toLocaleDateString('fr-FR'),
-      sortable: true,
-      width: '100px',
+      cell: (row) => (
+        <div className="p-2">
+          <p className="text-gray-700 font-medium">{row.user?.name || 'Anonyme'}</p>
+        </div>
+      ),
+      width: "240px",
     },
     {
       name: 'Actions',
-      cell: row => (
+      cell: (row) => (
         <div className="flex space-x-2">
           <button
-            onClick={() => handleEdit(row)}
-            className="px-3 py-1 text-xs border border-transparent rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+            onClick={() => handleEditTranslation(row)}
+            className="px-3 py-1.5 bg-transparent border border-green-500 text-green-500 rounded-md hover:bg-green-600 hover:text-white transition-colors shadow-sm"
           >
             Modifier
           </button>
           <button
-            onClick={() => handleDelete(row.id)}
-            className="px-3 py-1 text-xs border border-transparent rounded-md text-red-700 bg-red-100 hover:bg-red-200"
+            onClick={() => confirmDeleteTranslation(row)}
+            className="px-3 py-1.5 bg-transparent border border-red-500 text-red-500 rounded-md hover:bg-red-600 hover:text-white transition-colors shadow-sm"
           >
             Supprimer
           </button>
         </div>
       ),
-      width: '200px',
+      width: '240px',
     },
   ];
 
-  // Styles personnalisés
-  const customStyles = {
-    headRow: {
-      style: {
-        backgroundColor: '#f3f4f6',
-        color: '#374151',
-        fontSize: '0.875rem',
-        fontWeight: '600',
-      },
-    },
-    rows: {
-      style: {
-        minHeight: '72px',
-        fontSize: '0.875rem',
-        '&:nth-of-type(odd)': {
-          backgroundColor: '#f9fafb',
-        },
-        '&:hover': {
-          backgroundColor: '#f3f4f6',
-        },
-      },
-    },
-  };
+  const filteredTranslations = translations.filter((translation) => {
+    if (filterLang === 'all') return true;
+    return (
+      translation.source_language === filterLang ||
+      translation.target_language === filterLang
+    );
+  });
+
+  const TranslationModalContent = memo(({ 
+    editingTranslation, 
+    isSubmitting, 
+    newTranslation, 
+    handleInputChange, 
+    handleCreateTranslation, 
+    languages, 
+    onClose 
+  }) => {
+    const [localTranslation, setLocalTranslation] = useState(newTranslation);
+
+    useEffect(() => {
+      setLocalTranslation(newTranslation);
+    }, [newTranslation]);
+
+    const handleLocalInputChange = useCallback((e) => {
+      const { name, value } = e.target;
+      setLocalTranslation(prev => ({
+        ...prev,
+        [name]: value
+      }));
+      handleInputChange(e);
+    }, [handleInputChange]);
+
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">
+            {editingTranslation ? 'Modifier la traduction' : 'Ajouter une nouvelle traduction'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <form onSubmit={handleCreateTranslation} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Langue source
+              </label>
+              <select
+                name="source_language"
+                value={localTranslation.source_language}
+                onChange={handleLocalInputChange}
+                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+              >
+                {Object.entries(languages).map(([code, name]) => (
+                  <option key={`source-${code}`} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Langue cible
+              </label>
+              <select
+                name="target_language"
+                value={localTranslation.target_language}
+                onChange={handleLocalInputChange}
+                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+              >
+                {Object.entries(languages).map(([code, name]) => (
+                  <option key={`target-${code}`} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <label className="block text-sm font-medium text-gray-700">
+                Texte source
+              </label>
+              <span className="text-xs text-gray-500">
+                {localTranslation.source_text.length} caractères
+              </span>
+            </div>
+            <textarea
+              name="source_text"
+              value={localTranslation.source_text}
+              onChange={handleLocalInputChange}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors min-h-[120px]"
+              placeholder="Entrez le texte à traduire"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <label className="block text-sm font-medium text-gray-700">
+                Texte traduit
+              </label>
+              <span className="text-xs text-gray-500">
+                {localTranslation.target_text.length} caractères
+              </span>
+            </div>
+            <textarea
+              name="target_text"
+              value={localTranslation.target_text}
+              onChange={handleLocalInputChange}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors min-h-[120px]"
+              placeholder="Entrez la traduction"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              {isSubmitting ? 'En cours...' : editingTranslation ? 'Mettre à jour' : 'Ajouter'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  });
+
+  const LanguageModalContent = memo(({ 
+    isSubmitting, 
+    newLanguage, 
+    handleLanguageInputChange, 
+    handleAddLanguage, 
+    onClose 
+  }) => {
+    const [localLanguage, setLocalLanguage] = useState(newLanguage);
+
+    useEffect(() => {
+      setLocalLanguage(newLanguage);
+    }, [newLanguage]);
+
+    const handleLocalInputChange = useCallback((e) => {
+      const { name, value } = e.target;
+      setLocalLanguage(prev => ({
+        ...prev,
+        [name]: value
+      }));
+      handleLanguageInputChange(e);
+    }, [handleLanguageInputChange]);
+
+    return (
+      <div className="text-center">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Ajouter une nouvelle langue</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <form onSubmit={handleAddLanguage} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nom de la langue
+            </label>
+            <input
+              name="language"
+              type="text"
+              value={localLanguage.language}
+              onChange={handleLocalInputChange}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+              placeholder="Ex: Français"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Code de la langue
+            </label>
+            <input
+              name="language_code"
+              type="text"
+              value={localLanguage.language_code}
+              onChange={handleLocalInputChange}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+              placeholder="Ex: fr"
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              {isSubmitting ? 'En cours...' : 'Ajouter'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  });
+
+  const Modal = memo(({ isOpen, onClose, children }) => {
+    if (!isOpen) return null;
+    
+    const handleBackgroundClick = useCallback((e) => {
+      if (e.target === e.currentTarget) {
+        onClose();
+      }
+    }, [onClose]);
+
+    return (
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300"
+        onClick={handleBackgroundClick}
+      >
+        <div 
+          className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl transform transition-all duration-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* En-tête */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Gestionnaire de Traductions</h1>
-            <p className="mt-2 text-gray-600">Gérez et créez vos traductions</p>
-          </div>
+    <div className="container mx-auto px-6 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold text-gray-800">Gestion des traductions</h1>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowAddLanguageModal(true)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center shadow-md"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Nouvelle langue
+          </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center shadow-md"
           >
-            <svg className="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Nouvelle traduction
           </button>
         </div>
+      </div>
 
-        {/* Filtre */}
-        <div className="mb-6 bg-white p-4 rounded-lg shadow">
+      <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold text-gray-700">Liste des traductions</h2>
           <div className="flex items-center space-x-4">
-            <span className="text-sm font-medium text-gray-700">Filtrer par langue:</span>
+            <span className="text-sm font-medium text-gray-700">
+              Filtrer par langue:
+            </span>
             <select
               value={filterLang}
               onChange={(e) => setFilterLang(e.target.value)}
-              className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+              disabled={loading}
             >
               <option value="all">Toutes les langues</option>
-              {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                <option key={code} value={code}>{name}</option>
-              ))}
+              {loading ? (
+                <option disabled>Chargement des langues...</option>
+              ) : (
+                Object.entries(languages).map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
 
-        {/* Tableau */}
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden">
-          <DataTable
-            columns={columns}
-            data={filteredTranslations}
-            pagination
-            paginationPerPage={10}
-            keyField="id"
-            progressPending={loading}
-            customStyles={customStyles}
-            noDataComponent={
-              <div className="text-center py-12">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                </svg>
-                <h3 className="mt-2 text-lg font-medium text-gray-900">Aucune traduction</h3>
-                <p className="mt-1 text-gray-500">Ajoutez votre première traduction</p>
-              </div>
-            }
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={filteredTranslations}
+          progressPending={loading}
+          pagination
+          paginationPerPage={10}
+          highlightOnHover
+          noDataComponent={
+            <div className="p-6 text-center text-gray-500">
+              Aucune traduction trouvée
+            </div>
+          }
+          customStyles={{
+            headRow: {
+              style: {
+                backgroundColor: '#f9fafb',
+                borderBottomWidth: '2px',
+                borderColor: '#e5e7eb',
+                fontWeight: 'bold',
+              },
+            },
+            rows: {
+              style: {
+                minHeight: '72px',
+                '&:not(:last-of-type)': {
+                  borderBottomWidth: '1px',
+                  borderColor: '#f3f4f6',
+                },
+                '&:hover': {
+                  backgroundColor: '#f9fafb',
+                },
+              },
+            },
+            pagination: {
+              style: {
+                borderTopWidth: '1px',
+                borderColor: '#e5e7eb',
+              },
+            },
+          }}
+        />
       </div>
 
-      {/* Modal d'ajout */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-2xl w-full mx-4">
-            <h3 className="text-xl font-semibold mb-4">Ajouter une traduction</h3>
-            <form onSubmit={handleCreateTranslation} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Langue source</label>
-                  <select
-                    value={newTranslation.source_language}
-                    onChange={(e) => setNewTranslation({ ...newTranslation, source_language: e.target.value })}
-                    className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  >
-                    {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                      <option key={`src-${code}`} value={code}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Langue cible</label>
-                  <select
-                    value={newTranslation.target_language}
-                    onChange={(e) => setNewTranslation({ ...newTranslation, target_language: e.target.value })}
-                    className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  >
-                    {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                      <option key={`tgt-${code}`} value={code}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Texte source</label>
-                <textarea
-                  value={newTranslation.source_text}
-                  onChange={(e) => setNewTranslation({ ...newTranslation, source_text: e.target.value })}
-                  className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  rows="3"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Texte traduit</label>
-                <textarea
-                  value={newTranslation.target_text}
-                  onChange={(e) => setNewTranslation({ ...newTranslation, target_text: e.target.value })}
-                  className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  rows="3"
-                  required
-                />
-              </div>
-              <div className="flex justify-end space-x-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'En cours...' : 'Ajouter'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal pour ajouter une langue */}
+      <Modal isOpen={showAddLanguageModal} onClose={() => setShowAddLanguageModal(false)}>
+        <LanguageModalContent
+          isSubmitting={isSubmitting}
+          newLanguage={newLanguage}
+          handleLanguageInputChange={handleLanguageInputChange}
+          handleAddLanguage={handleAddLanguage}
+          onClose={() => setShowAddLanguageModal(false)}
+        />
+      </Modal>
 
-      {/* Modal d'édition */}
-      {editingTranslation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-2xl w-full mx-4">
-            <h3 className="text-xl font-semibold mb-4">Modifier la traduction</h3>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Langue source</label>
-                  <select
-                    value={editingTranslation.source_language}
-                    onChange={(e) => setEditingTranslation({ ...editingTranslation, source_language: e.target.value })}
-                    className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  >
-                    {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                      <option key={`edit-src-${code}`} value={code}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Langue cible</label>
-                  <select
-                    value={editingTranslation.target_language}
-                    onChange={(e) => setEditingTranslation({ ...editingTranslation, target_language: e.target.value })}
-                    className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  >
-                    {Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => (
-                      <option key={`edit-tgt-${code}`} value={code}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Texte source</label>
-                <textarea
-                  value={editingTranslation.source_text}
-                  onChange={(e) => setEditingTranslation({ ...editingTranslation, source_text: e.target.value })}
-                  className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  rows="3"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Texte traduit</label>
-                <textarea
-                  value={editingTranslation.target_text}
-                  onChange={(e) => setEditingTranslation({ ...editingTranslation, target_text: e.target.value })}
-                  className="w-full p-2 rounded-lg border-gray-300 shadow-sm"
-                  rows="3"
-                  required
-                />
-              </div>
-              <div className="flex justify-end space-x-3 mt-4">
-                <button
-                  onClick={() => setEditingTranslation(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleUpdate}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'En cours...' : 'Enregistrer'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal pour ajouter/modifier une traduction */}
+      <Modal isOpen={showAddModal} onClose={() => {
+        setShowAddModal(false);
+        resetTranslationForm();
+      }}>
+        <TranslationModalContent
+          key={editingTranslation ? `edit-${editingTranslation.id}` : 'add-new'}
+          editingTranslation={editingTranslation}
+          isSubmitting={isSubmitting}
+          newTranslation={newTranslation}
+          handleInputChange={handleInputChange}
+          handleCreateTranslation={handleCreateTranslation}
+          languages={languages}
+          onClose={() => {
+            setShowAddModal(false);
+            resetTranslationForm();
+          }}
+        />
+      </Modal>
 
       {/* Modal de confirmation de suppression */}
-      {confirmDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+      <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)}>
+        <div className="text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-rose-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          <h3 className="text-xl font-bold text-gray-800 mb-4">Confirmer la suppression</h3>
+          
+          {translationToDelete && (
+            <div className="bg-gray-50 p-4 rounded-lg mb-4 text-left">
+              <div className="mb-3">
+                <p className="text-sm font-medium text-gray-700">Langues :</p>
+                <p className="text-sm text-gray-900">
+                  {languages[translationToDelete.source_language]} → {languages[translationToDelete.target_language]}
+                </p>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Confirmer la suppression</h3>
-              <p className="text-sm text-gray-500 mb-6">
-                Êtes-vous sûr de vouloir supprimer cette traduction ?
-              </p>
-              <div className="flex justify-center space-x-4">
-                <button
-                  onClick={() => setConfirmDeleteModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                >
-                  Supprimer
-                </button>
+              <div className="mb-3">
+                <p className="text-sm font-medium text-gray-700">Texte source :</p>
+                <p className="text-sm text-gray-900 line-clamp-2">{translationToDelete.source_text}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Texte traduit :</p>
+                <p className="text-sm text-gray-900 line-clamp-2">{translationToDelete.target_text}</p>
               </div>
             </div>
+          )}
+          
+          <p className="text-gray-600 mb-6">
+            Êtes-vous sûr de vouloir supprimer cette traduction ? Cette action est irréversible.
+          </p>
+          
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => translationToDelete && handleDeleteTranslation(translationToDelete.id)}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Suppression...' : 'Supprimer'}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

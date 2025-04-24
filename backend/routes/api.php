@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\LanguageController;
 use App\Http\Controllers\Api\TranslationController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
@@ -24,9 +25,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [UserController::class, 'getConnectedUser']);
     
     Route::apiResource('translations', TranslationController::class);
-    Route::get('translations/lang/{source_language}/{target_language}', [TranslationController::class, 'getByLanguage']);
+    Route::get('/translations/lang/{source_language}/{target_language}', [TranslationController::class, 'getByLanguage']);
 
-    Route::get('user', function (Request $request) {
+    Route::get('/languages', [LanguageController::class, 'index']);
+    Route::post('/languages', [LanguageController::class, 'store']);
+
+    Route::get('/user', function (Request $request) {
         return $request->user();
     });
 });
