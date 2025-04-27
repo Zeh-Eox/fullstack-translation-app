@@ -10,6 +10,223 @@ import { getLanguages, createLanguage } from '../../api/requests/languagesReques
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+const Modal = memo(({ isOpen, onClose, children }) => {
+  if (!isOpen) return null;
+
+  const handleBackgroundClick = useCallback((e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300"
+      onClick={handleBackgroundClick}
+    >
+      <div
+        className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl transform transition-all duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+});
+
+const TranslationModalContent = memo(({
+  editingTranslation,
+  isSubmitting,
+  newTranslation,
+  handleInputChange,
+  handleCreateTranslation,
+  languages,
+  onClose
+}) => {
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold text-gray-800">
+          {editingTranslation ? 'Modifier la traduction' : 'Ajouter une nouvelle traduction'}
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-gray-500 hover:text-gray-700"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form onSubmit={handleCreateTranslation} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Langue source
+            </label>
+            <select
+              name="source_language"
+              value={newTranslation.source_language}
+              onChange={handleInputChange}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+            >
+              {Object.entries(languages).map(([code, name]) => (
+                <option key={`source-${code}`} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Langue cible
+            </label>
+            <select
+              name="target_language"
+              value={newTranslation.target_language}
+              onChange={handleInputChange}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+            >
+              {Object.entries(languages).map(([code, name]) => (
+                <option key={`target-${code}`} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <label className="block text-sm font-medium text-gray-700">
+              Texte source
+            </label>
+            <span className="text-xs text-gray-500">
+              {newTranslation.source_text.length} caractères
+            </span>
+          </div>
+          <textarea
+            name="source_text"
+            value={newTranslation.source_text}
+            onChange={handleInputChange}
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors min-h-[120px]"
+            placeholder="Entrez le texte à traduire"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <label className="block text-sm font-medium text-gray-700">
+              Texte traduit
+            </label>
+            <span className="text-xs text-gray-500">
+              {newTranslation.target_text.length} caractères
+            </span>
+          </div>
+          <textarea
+            name="target_text"
+            value={newTranslation.target_text}
+            onChange={handleInputChange}
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors min-h-[120px]"
+            placeholder="Entrez la traduction"
+            required
+          />
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+          >
+            {isSubmitting ? 'En cours...' : editingTranslation ? 'Mettre à jour' : 'Ajouter'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+});
+
+const LanguageModalContent = memo(({
+  isSubmitting,
+  newLanguage,
+  handleLanguageInputChange,
+  handleAddLanguage,
+  onClose
+}) => {
+  return (
+    <div className="text-center">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Ajouter une nouvelle langue</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form onSubmit={handleAddLanguage} className="space-y-5">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Nom de la langue
+          </label>
+          <input
+            name="language"
+            type="text"
+            value={newLanguage.language}
+            onChange={handleLanguageInputChange}
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+            placeholder="Ex: Français"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Code de la langue
+          </label>
+          <input
+            name="language_code"
+            type="text"
+            value={newLanguage.language_code}
+            onChange={handleLanguageInputChange}
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
+            placeholder="Ex: fr"
+            required
+          />
+        </div>
+        <div className="flex justify-end space-x-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+          >
+            {isSubmitting ? 'En cours...' : 'Ajouter'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+});
+
 const Translations = () => {
   const [translations, setTranslations] = useState([]);
   const [languages, setLanguages] = useState({});
@@ -32,7 +249,7 @@ const Translations = () => {
   });
   const [editingTranslation, setEditingTranslation] = useState(null);
 
-  const fetchLanguages = async () => {
+  const fetchLanguages = useCallback(async () => {
     setLoading(true);
     try {
       const response = await getLanguages();
@@ -52,9 +269,9 @@ const Translations = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchTranslations = async () => {
+  const fetchTranslations = useCallback(async () => {
     setLoading(true);
     try {
       const response = await getAllTranslations();
@@ -70,7 +287,7 @@ const Translations = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const resetTranslationForm = useCallback(() => {
     setNewTranslation({
@@ -116,11 +333,13 @@ const Translations = () => {
     try {
       if (!newTranslation.source_text.trim() || !newTranslation.target_text.trim()) {
         toast.error('Les champs de texte ne peuvent pas être vides');
+        setIsSubmitting(false);
         return;
       }
 
       if (newTranslation.source_language === newTranslation.target_language) {
         toast.error('Les langues source et cible doivent être différentes');
+        setIsSubmitting(false);
         return;
       }
 
@@ -145,7 +364,7 @@ const Translations = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [newTranslation, editingTranslation, resetTranslationForm]);
+  }, [newTranslation, editingTranslation, resetTranslationForm, fetchTranslations]);
 
   const handleAddLanguage = useCallback(async (e) => {
     e.preventDefault();
@@ -154,11 +373,12 @@ const Translations = () => {
     try {
       if (!newLanguage.language.trim() || !newLanguage.language_code.trim()) {
         toast.error('Veuillez remplir tous les champs');
+        setIsSubmitting(false);
         return;
       }
 
       const response = await createLanguage(newLanguage);
-      
+
       if (response?.data?.success) {
         toast.success('Langue ajoutée avec succès');
         setShowAddLanguageModal(false);
@@ -173,9 +393,9 @@ const Translations = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [newLanguage]);
+  }, [newLanguage, fetchLanguages]);
 
-  const handleDeleteTranslation = async (id) => {
+  const handleDeleteTranslation = useCallback(async (id) => {
     try {
       setIsSubmitting(true);
       const response = await deleteTranslation(id);
@@ -193,17 +413,22 @@ const Translations = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [fetchTranslations]);
 
   const confirmDeleteTranslation = useCallback((translation) => {
     setTranslationToDelete(translation);
     setShowDeleteModal(true);
   }, []);
 
+  const closeAddModal = useCallback(() => {
+    setShowAddModal(false);
+    resetTranslationForm();
+  }, [resetTranslationForm]);
+
   useEffect(() => {
     fetchLanguages();
     fetchTranslations();
-  }, []);
+  }, [fetchLanguages, fetchTranslations]);
 
   const columns = [
     {
@@ -255,12 +480,14 @@ const Translations = () => {
       cell: (row) => (
         <div className="flex space-x-2">
           <button
+            type="button"
             onClick={() => handleEditTranslation(row)}
             className="px-3 py-1.5 bg-transparent border border-green-500 text-green-500 rounded-md hover:bg-green-600 hover:text-white transition-colors shadow-sm"
           >
             Modifier
           </button>
           <button
+            type="button"
             onClick={() => confirmDeleteTranslation(row)}
             className="px-3 py-1.5 bg-transparent border border-red-500 text-red-500 rounded-md hover:bg-red-600 hover:text-white transition-colors shadow-sm"
           >
@@ -280,257 +507,13 @@ const Translations = () => {
     );
   });
 
-  const TranslationModalContent = memo(({ 
-    editingTranslation, 
-    isSubmitting, 
-    newTranslation, 
-    handleInputChange, 
-    handleCreateTranslation, 
-    languages, 
-    onClose 
-  }) => {
-    const [localTranslation, setLocalTranslation] = useState(newTranslation);
-
-    useEffect(() => {
-      setLocalTranslation(newTranslation);
-    }, [newTranslation]);
-
-    const handleLocalInputChange = useCallback((e) => {
-      const { name, value } = e.target;
-      setLocalTranslation(prev => ({
-        ...prev,
-        [name]: value
-      }));
-      handleInputChange(e);
-    }, [handleInputChange]);
-
-    return (
-      <div>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">
-            {editingTranslation ? 'Modifier la traduction' : 'Ajouter une nouvelle traduction'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <form onSubmit={handleCreateTranslation} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Langue source
-              </label>
-              <select
-                name="source_language"
-                value={localTranslation.source_language}
-                onChange={handleLocalInputChange}
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
-              >
-                {Object.entries(languages).map(([code, name]) => (
-                  <option key={`source-${code}`} value={code}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Langue cible
-              </label>
-              <select
-                name="target_language"
-                value={localTranslation.target_language}
-                onChange={handleLocalInputChange}
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
-              >
-                {Object.entries(languages).map(([code, name]) => (
-                  <option key={`target-${code}`} value={code}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="block text-sm font-medium text-gray-700">
-                Texte source
-              </label>
-              <span className="text-xs text-gray-500">
-                {localTranslation.source_text.length} caractères
-              </span>
-            </div>
-            <textarea
-              name="source_text"
-              value={localTranslation.source_text}
-              onChange={handleLocalInputChange}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors min-h-[120px]"
-              placeholder="Entrez le texte à traduire"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="block text-sm font-medium text-gray-700">
-                Texte traduit
-              </label>
-              <span className="text-xs text-gray-500">
-                {localTranslation.target_text.length} caractères
-              </span>
-            </div>
-            <textarea
-              name="target_text"
-              value={localTranslation.target_text}
-              onChange={handleLocalInputChange}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors min-h-[120px]"
-              placeholder="Entrez la traduction"
-              required
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-            >
-              {isSubmitting ? 'En cours...' : editingTranslation ? 'Mettre à jour' : 'Ajouter'}
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  });
-
-  const LanguageModalContent = memo(({ 
-    isSubmitting, 
-    newLanguage, 
-    handleLanguageInputChange, 
-    handleAddLanguage, 
-    onClose 
-  }) => {
-    const [localLanguage, setLocalLanguage] = useState(newLanguage);
-
-    useEffect(() => {
-      setLocalLanguage(newLanguage);
-    }, [newLanguage]);
-
-    const handleLocalInputChange = useCallback((e) => {
-      const { name, value } = e.target;
-      setLocalLanguage(prev => ({
-        ...prev,
-        [name]: value
-      }));
-      handleLanguageInputChange(e);
-    }, [handleLanguageInputChange]);
-
-    return (
-      <div className="text-center">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">Ajouter une nouvelle langue</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <form onSubmit={handleAddLanguage} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nom de la langue
-            </label>
-            <input
-              name="language"
-              type="text"
-              value={localLanguage.language}
-              onChange={handleLocalInputChange}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
-              placeholder="Ex: Français"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Code de la langue
-            </label>
-            <input
-              name="language_code"
-              type="text"
-              value={localLanguage.language_code}
-              onChange={handleLocalInputChange}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors"
-              placeholder="Ex: fr"
-              required
-            />
-          </div>
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-            >
-              {isSubmitting ? 'En cours...' : 'Ajouter'}
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  });
-
-  const Modal = memo(({ isOpen, onClose, children }) => {
-    if (!isOpen) return null;
-    
-    const handleBackgroundClick = useCallback((e) => {
-      if (e.target === e.currentTarget) {
-        onClose();
-      }
-    }, [onClose]);
-
-    return (
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity duration-300"
-        onClick={handleBackgroundClick}
-      >
-        <div 
-          className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl transform transition-all duration-300"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {children}
-        </div>
-      </div>
-    );
-  });
-
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-gray-800">Gestion des traductions</h1>
         <div className="flex space-x-3">
           <button
+            type="button"
             onClick={() => setShowAddLanguageModal(true)}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center shadow-md"
           >
@@ -540,6 +523,7 @@ const Translations = () => {
             Nouvelle langue
           </button>
           <button
+            type="button"
             onClick={() => setShowAddModal(true)}
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center shadow-md"
           >
@@ -633,10 +617,7 @@ const Translations = () => {
       </Modal>
 
       {/* Modal pour ajouter/modifier une traduction */}
-      <Modal isOpen={showAddModal} onClose={() => {
-        setShowAddModal(false);
-        resetTranslationForm();
-      }}>
+      <Modal isOpen={showAddModal} onClose={closeAddModal}>
         <TranslationModalContent
           key={editingTranslation ? `edit-${editingTranslation.id}` : 'add-new'}
           editingTranslation={editingTranslation}
@@ -645,10 +626,7 @@ const Translations = () => {
           handleInputChange={handleInputChange}
           handleCreateTranslation={handleCreateTranslation}
           languages={languages}
-          onClose={() => {
-            setShowAddModal(false);
-            resetTranslationForm();
-          }}
+          onClose={closeAddModal}
         />
       </Modal>
 
@@ -659,7 +637,7 @@ const Translations = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
           <h3 className="text-xl font-bold text-gray-800 mb-4">Confirmer la suppression</h3>
-          
+
           {translationToDelete && (
             <div className="bg-gray-50 p-4 rounded-lg mb-4 text-left">
               <div className="mb-3">
@@ -678,19 +656,21 @@ const Translations = () => {
               </div>
             </div>
           )}
-          
+
           <p className="text-gray-600 mb-6">
             Êtes-vous sûr de vouloir supprimer cette traduction ? Cette action est irréversible.
           </p>
-          
+
           <div className="flex justify-center space-x-4">
             <button
+              type="button"
               onClick={() => setShowDeleteModal(false)}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Annuler
             </button>
             <button
+              type="button"
               onClick={() => translationToDelete && handleDeleteTranslation(translationToDelete.id)}
               disabled={isSubmitting}
               className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
