@@ -19,7 +19,7 @@ class LanguageController extends Controller
     }
 
     public function store(CreateLanguageRequest $request): JsonResponse
-    { 
+    {
         $language = new Language();
 
         $language->language_code = $request->language_code;
@@ -31,6 +31,16 @@ class LanguageController extends Controller
             'success' => true,
             'status_message' => 'Language successfully added',
             'data' => $language
+        ]);
+    }
+
+    public function destroy(Language $language): JsonResponse
+    {
+        $language->delete();
+
+        return response()->json([
+            'success' => true,
+            'status_message' => 'Languages deleted successfully',
         ]);
     }
 }

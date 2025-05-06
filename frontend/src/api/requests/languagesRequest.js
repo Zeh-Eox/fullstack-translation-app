@@ -9,3 +9,8 @@ export const createLanguage = async (languageData) => {
   const response = await HTTP_CLIENT.post('/languages', languageData);
   return response;
 };
+
+export const deleteLanguage = async (id) => {
+  const response = await HTTP_CLIENT.delete(`/languages/${id}`);
+  return response;
+}

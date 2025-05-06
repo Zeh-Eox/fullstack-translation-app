@@ -29,6 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/languages', [LanguageController::class, 'index']);
     Route::post('/languages', [LanguageController::class, 'store']);
+    Route::delete('/languages/{language}', [LanguageController::class, 'destroy']);
 
     Route::get('/user', function (Request $request) {
         return $request->user();
