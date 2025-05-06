@@ -16,7 +16,7 @@ const normalizeResponse = (response) => {
       }
     };
 };
-  
+
 // Fonction d'assistance pour gérer les erreurs
 const handleApiError = (error) => {
     console.error("API Error:", error);
